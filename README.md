@@ -74,9 +74,9 @@ brew services restart ollama
 | Setting | Value | Why |
 |---------|-------|-----|
 | `selected_language` | `en` | Saves context tokens vs `auto` detection — reduces dropped words |
-| `word_correction_threshold` | `0.05` | Default `0.18` too aggressive — silently drops low-confidence words |
+| `word_correction_threshold` | `0.9` | Default `0.18` too aggressive — substitutes "started" → "StarDict". At `0.9`, only near-exact phonetic matches trigger substitution |
 | `extra_recording_buffer_ms` | `500` | Catches trailing words that get cut off |
-| Custom words | 15 technical terms | Context-aware matching (won't force-substitute similar words) |
+| Custom words | 3 unique proper nouns | Only truly unique words (Prashil, XTEInk, CrossPoint) — technical terms handled by Gemma cleanup prompt instead |
 
 ## Scripts
 
@@ -98,6 +98,15 @@ Switch post-processing between Apple Intelligence and Ollama:
 ./scripts/switch-handy-provider.sh apple   # use Apple Intelligence
 ./scripts/switch-handy-provider.sh ollama  # use Ollama/Gemma
 ./scripts/switch-handy-provider.sh         # show current
+```
+
+### `scripts/fix-word-substitution.sh`
+
+Fix the custom word force-substitution bug (raises threshold, trims word list):
+
+```bash
+./scripts/fix-word-substitution.sh --dry-run  # preview changes
+./scripts/fix-word-substitution.sh             # apply (Handy must be quit)
 ```
 
 ### macOS Quick Action: "Add to Handy Words"
@@ -130,7 +139,7 @@ bash scripts/install-add-word-service.sh
 
 ## Known Limitations
 
-1. **Custom words force-substitution** — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" will aggressively replace similar-sounding words like "started". **Workaround:** Only put truly unique words in `custom_words` (names, brands with no homophones). Handle common technical terms in the Gemma cleanup prompt instead. Consider setting `word_correction_threshold` to `0.9` for near-exact matches only.
+1. **Custom words force-substitution** (FIXED) — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" aggressively replaced "started". **Fix applied:** `word_correction_threshold` set to `0.9` (near-exact matches only), `custom_words` trimmed to 3 truly unique proper nouns, and technical terms moved to the Gemma cleanup prompt where they're only used when context matches. Run `scripts/fix-word-substitution.sh` to re-apply if Handy reverts the config.
 2. **Config overwrite** — Editing `settings_store.json` while Handy is quit works, but changing ANY setting in Handy's UI causes it to save its in-memory config, reverting all JSON edits. Make all changes at once when Handy is quit.
 3. **Dropped speech chunks** — Long dictation sometimes loses middle/end content. This is a VAD (Voice Activity Detection) chunking issue in the transcription engine. Mitigated by setting language to `en` (saves context tokens) and lowering `word_correction_threshold`.
 4. **5s cleanup delay** — Sum of transcription (~2s) + Gemma cleanup (~3s). Use `fn` for instant raw when speed matters.
@@ -147,6 +156,7 @@ bash scripts/install-add-word-service.sh
 │   └── cleanup-prompt.txt     # The post-processing prompt used by Gemma
 └── scripts/
     ├── add-custom-word.sh     # CLI to add custom words
+    ├── fix-word-substitution.sh  # Fix aggressive word substitution bug
     ├── switch-handy-provider.sh  # Switch between Apple Intelligence and Ollama
     └── install-add-word-service.sh  # Install macOS Quick Action for adding words
 ```

@@ -36,20 +36,8 @@
     "custom_filler_words": null,
     "custom_words": [
       "Prashil",
-      "Claude",
-      "StarDict",
-      "Wiktionary",
-      "CrossPoint",
       "XTEInk",
-      "Ollama",
-      "Gemma",
-      "WhisperFlow",
-      "WisprFlow",
-      "Handy",
-      "Cohere",
-      "GCIDE",
-      "KOReader",
-      "PyGlossary"
+      "CrossPoint"
     ],
     "debug_mode": false,
     "experimental_enabled": false,
@@ -195,6 +183,6 @@
     "update_checks_enabled": true,
     "vad_enabled": true,
     "whats_new_last_seen_version": "0.9.1",
-    "word_correction_threshold": 0.05
+    "word_correction_threshold": 0.9
   }
 }
