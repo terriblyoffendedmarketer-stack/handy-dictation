@@ -74,7 +74,7 @@ brew services restart ollama
 | Setting | Value | Why |
 |---------|-------|-----|
 | `selected_language` | `en` | Saves context tokens vs `auto` detection — reduces dropped words |
-| `word_correction_threshold` | `0.9` | Default `0.18` too aggressive — substitutes "started" → "StarDict". At `0.9`, only near-exact phonetic matches trigger substitution |
+| `word_correction_threshold` | `0.05` | Default `0.18` too aggressive — substitutes "started" → "StarDict". HIGHER = MORE AGGRESSIVE (not stricter). At `0.05`, only near-exact phonetic matches trigger. `0.9` is catastrophic — every word becomes a custom word |
 | `extra_recording_buffer_ms` | `500` | Catches trailing words that get cut off |
 | Custom words | 3 unique proper nouns | Only truly unique words (Prashil, XTEInk, CrossPoint) — technical terms handled by Gemma cleanup prompt instead |
 
@@ -139,7 +139,7 @@ bash scripts/install-add-word-service.sh
 
 ## Known Limitations
 
-1. **Custom words force-substitution** (FIXED) — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" aggressively replaced "started". **Fix applied:** `word_correction_threshold` set to `0.9` (near-exact matches only), `custom_words` trimmed to 3 truly unique proper nouns, and technical terms moved to the Gemma cleanup prompt where they're only used when context matches. Run `scripts/fix-word-substitution.sh` to re-apply if Handy reverts the config.
+1. **Custom words force-substitution** (FIXED) — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" aggressively replaced "started". At `0.9`, every word becomes a custom word. **Fix applied:** `word_correction_threshold` set to `0.05` (near-exact matches only — higher values are MORE aggressive, not stricter), `custom_words` trimmed to 3 truly unique proper nouns, and technical terms moved to the Gemma cleanup prompt where they're only used when context matches. Run `scripts/fix-word-substitution.sh` to re-apply if Handy reverts the config. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the full post-mortem.
 2. **Config overwrite** — Editing `settings_store.json` while Handy is quit works, but changing ANY setting in Handy's UI causes it to save its in-memory config, reverting all JSON edits. Make all changes at once when Handy is quit.
 3. **Dropped speech chunks** — Long dictation sometimes loses middle/end content. This is a VAD (Voice Activity Detection) chunking issue in the transcription engine. Mitigated by setting language to `en` (saves context tokens) and lowering `word_correction_threshold`.
 4. **5s cleanup delay** — Sum of transcription (~2s) + Gemma cleanup (~3s). Use `fn` for instant raw when speed matters.
@@ -150,6 +150,7 @@ bash scripts/install-add-word-service.sh
 
 ```
 ├── README.md                  # This file
+├── TROUBLESHOOTING.md         # Detailed post-mortem on the word_correction_threshold bug
 ├── config/
 │   └── settings_store.json    # Handy configuration (copy to ~/Library/Application Support/com.pais.handy/)
 ├── prompts/

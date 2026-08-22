@@ -183,6 +183,6 @@
     "update_checks_enabled": true,
     "vad_enabled": true,
     "whats_new_last_seen_version": "0.9.1",
-    "word_correction_threshold": 0.9
+    "word_correction_threshold": 0.05
   }
 }

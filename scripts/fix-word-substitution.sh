@@ -6,8 +6,9 @@
 # Gotchas:
 # - Handy injects custom_words into Whisper's initial_prompt, biasing the decoder.
 #   Common-sounding words (Handy, Claude, Gemma) cause false substitutions.
-# - word_correction_threshold at 0.18 (default) does aggressive post-hoc substitution.
-#   At 0.9, only near-exact phonetic matches trigger substitution.
+# - word_correction_threshold controls matching looseness: HIGHER = MORE AGGRESSIVE.
+#   Default 0.18 already too aggressive. 0.9 = catastrophic (every word becomes custom word).
+#   Safe value: 0.05 (only near-exact phonetic matches trigger substitution).
 # - selected_language "auto" wastes context tokens on language detection.
 #   Setting to "en" frees those tokens for better transcription accuracy.
 
@@ -48,7 +49,7 @@ echo ""
 KEEP_WORDS='["Prashil", "XTEInk", "CrossPoint"]'
 
 echo "Planned changes:"
-echo "  word_correction_threshold: 0.18 → 0.9 (near-exact matches only)"
+echo "  word_correction_threshold: → 0.05 (near-exact matches only)"
 echo "  selected_language: auto → en (saves context tokens)"
 echo "  custom_words: trim to only unique proper nouns:"
 echo "$KEEP_WORDS" | jq -r '.[]' | sed 's/^/    /'
@@ -66,7 +67,7 @@ cp "$CONFIG" "${CONFIG}.bak"
 echo "Backup saved to settings_store.json.bak"
 
 jq --argjson keep "$KEEP_WORDS" '
-  .settings.word_correction_threshold = 0.9 |
+  .settings.word_correction_threshold = 0.05 |
   .settings.selected_language = "en" |
   .settings.custom_words = $keep
 ' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
