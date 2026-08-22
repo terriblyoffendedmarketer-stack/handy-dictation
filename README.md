@@ -130,10 +130,12 @@ bash scripts/install-add-word-service.sh
 
 ## Known Limitations
 
-1. **Dropped speech chunks** — Long dictation sometimes loses middle/end content. This is a VAD (Voice Activity Detection) chunking issue in the transcription engine. Mitigated by setting language to `en` and lowering `word_correction_threshold`.
-2. **5s cleanup delay** — Sum of transcription (~2s) + Gemma cleanup (~3s). Use `fn` for instant raw when speed matters.
-3. **Cold start** — First dictation after 2h idle takes ~18s while the model loads into memory.
-4. **Custom words don't auto-learn** — Must be added manually via the script or Quick Action. No correction-based learning yet.
+1. **Custom words force-substitution** — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" will aggressively replace similar-sounding words like "started". **Workaround:** Only put truly unique words in `custom_words` (names, brands with no homophones). Handle common technical terms in the Gemma cleanup prompt instead. Consider setting `word_correction_threshold` to `0.9` for near-exact matches only.
+2. **Config overwrite** — Editing `settings_store.json` while Handy is quit works, but changing ANY setting in Handy's UI causes it to save its in-memory config, reverting all JSON edits. Make all changes at once when Handy is quit.
+3. **Dropped speech chunks** — Long dictation sometimes loses middle/end content. This is a VAD (Voice Activity Detection) chunking issue in the transcription engine. Mitigated by setting language to `en` (saves context tokens) and lowering `word_correction_threshold`.
+4. **5s cleanup delay** — Sum of transcription (~2s) + Gemma cleanup (~3s). Use `fn` for instant raw when speed matters.
+5. **Cold start** — First dictation after 2h idle takes ~18s while the model loads into memory.
+6. **Custom words don't auto-learn** — Must be added manually via the script or Quick Action. No correction-based learning yet.
 
 ## File Structure
 
