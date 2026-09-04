@@ -1,9 +1,13 @@
 #!/bin/bash
-# Wrapper that launches the dictation daemon inside this .app context
-# so macOS grants accessibility + microphone permissions to "Dictation.app"
-# Uses absolute paths so the app can live anywhere (~/Applications, /Applications, etc.)
+DICTATION_DIR="$HOME/.dictation"
 
-PROJECT_DIR="/Users/apple/Documents/Claude Code/handy-dictation"
+# If daemon is already running, open settings instead
+if pgrep -f "long-dictate.py" > /dev/null 2>&1; then
+    source "$DICTATION_DIR/.venv/bin/activate"
+    exec python3 "$DICTATION_DIR/settings.py" "$@"
+fi
 
-source "$PROJECT_DIR/.venv/bin/activate"
-exec python3 "$PROJECT_DIR/scripts/long-dictate.py" "$@"
+# Otherwise start the daemon
+exec > /tmp/dictation.log 2>&1
+source "$DICTATION_DIR/.venv/bin/activate"
+exec python3 "$DICTATION_DIR/long-dictate.py" "$@"

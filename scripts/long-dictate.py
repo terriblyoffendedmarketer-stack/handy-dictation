@@ -601,20 +601,38 @@ def run_daemon():
 
     if HOTKEY_NAME == "fn":
         import Quartz
-        NSEvent = AppKit.NSEvent
-        NSFlagsChanged = 1 << 12
-        FN_FLAG = 1 << 23
+        FN_FLAG = 0x800000
+        fn_was_down = [False]
 
-        def flags_handler(event):
-            flags = event.modifierFlags()
-            if flags & FN_FLAG:
+        def cg_event_callback(proxy, event_type, event, refcon):
+            flags = Quartz.CGEventGetFlags(event)
+            fn_down = bool(flags & FN_FLAG)
+            if fn_down and not fn_was_down[0]:
+                fn_was_down[0] = True
                 handle_press()
-            else:
-                if is_pressed:
-                    handle_release()
+            elif not fn_down and fn_was_down[0]:
+                fn_was_down[0] = False
+                handle_release()
+            return event
 
-        NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(NSFlagsChanged, flags_handler)
-        NSEvent.addLocalMonitorForEventsMatchingMask_handler_(NSFlagsChanged, lambda e: (flags_handler(e), e)[1])
+        mask = Quartz.CGEventMaskBit(Quartz.kCGEventFlagsChanged)
+        tap = Quartz.CGEventTapCreate(
+            Quartz.kCGSessionEventTap,
+            Quartz.kCGHeadInsertEventTap,
+            Quartz.kCGEventTapOptionListenOnly,
+            mask,
+            cg_event_callback,
+            None,
+        )
+        if tap:
+            source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
+            Quartz.CFRunLoopAddSource(
+                Quartz.CFRunLoopGetCurrent(), source, Quartz.kCFRunLoopCommonModes
+            )
+            Quartz.CGEventTapEnable(tap, True)
+            print("  Fn key: CGEventTap active", flush=True)
+        else:
+            print("  ERROR: CGEventTap failed — check Accessibility permission", flush=True)
     else:
         def on_press(key):
             if key == HOTKEY:

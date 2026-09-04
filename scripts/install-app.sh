@@ -41,6 +41,14 @@ cp -R "$APP_SRC" "$APP_DST"
 cat > "$APP_DST/Contents/MacOS/run" << 'RUNEOF'
 #!/bin/bash
 DICTATION_DIR="$HOME/.dictation"
+
+# If daemon is already running, open settings instead
+if pgrep -f "long-dictate.py" > /dev/null 2>&1; then
+    source "$DICTATION_DIR/.venv/bin/activate"
+    exec python3 "$DICTATION_DIR/settings.py" "$@"
+fi
+
+# Otherwise start the daemon
 exec > /tmp/dictation.log 2>&1
 source "$DICTATION_DIR/.venv/bin/activate"
 exec python3 "$DICTATION_DIR/long-dictate.py" "$@"
