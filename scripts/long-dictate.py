@@ -7,8 +7,8 @@
 #   ./scripts/dictate file.wav     # One-shot: transcribe an audio file
 #
 # Hotkey: Hold RIGHT OPTION to record, release to transcribe + paste.
-#   (fn can't be captured by Python on macOS — it's firmware-level.)
-#   Change HOTKEY below or set DICTATION_KEY env var.
+#   Fn key uses NSEvent flagsChanged (native AppKit), other keys use pynput.
+#   Change hotkey in ~/.dictation/config.json or set DICTATION_KEY env var.
 #
 # Requires: mlx-whisper, sounddevice, pyperclip, pynput (in .venv)
 # Run via Dictation.app for proper accessibility permissions:
@@ -62,6 +62,7 @@ KEY_MAP = {
     "f18": keyboard.Key.f18,
     "f19": keyboard.Key.f19,
     "f20": keyboard.Key.f20,
+    "fn": None,
 }
 
 
@@ -581,15 +582,15 @@ def run_daemon():
 
     is_pressed = False
 
-    def on_press(key):
+    def handle_press():
         nonlocal is_pressed
-        if key == HOTKEY and not is_pressed:
+        if not is_pressed:
             is_pressed = True
             start_recording()
 
-    def on_release(key):
+    def handle_release():
         nonlocal is_pressed
-        if key == HOTKEY and is_pressed:
+        if is_pressed:
             is_pressed = False
             app_id = target_app
             audio = stop_recording()
@@ -598,9 +599,34 @@ def run_daemon():
                     target=transcribe_and_paste, args=(audio, app_id), daemon=True
                 ).start()
 
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener.daemon = True
-    listener.start()
+    if HOTKEY_NAME == "fn":
+        import Quartz
+        NSEvent = AppKit.NSEvent
+        NSFlagsChanged = 1 << 12
+        FN_FLAG = 1 << 23
+
+        def flags_handler(event):
+            flags = event.modifierFlags()
+            if flags & FN_FLAG:
+                handle_press()
+            else:
+                if is_pressed:
+                    handle_release()
+
+        NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(NSFlagsChanged, flags_handler)
+        NSEvent.addLocalMonitorForEventsMatchingMask_handler_(NSFlagsChanged, lambda e: (flags_handler(e), e)[1])
+    else:
+        def on_press(key):
+            if key == HOTKEY:
+                handle_press()
+
+        def on_release(key):
+            if key == HOTKEY:
+                handle_release()
+
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener.daemon = True
+        listener.start()
 
     try:
         AppKit.NSRunLoop.currentRunLoop().run()

@@ -25,6 +25,7 @@ CONFIG_PATH = os.path.join(DICTATION_DIR, "config.json")
 WORDS_PATH = os.path.join(DICTATION_DIR, "words.txt")
 
 HOTKEY_OPTIONS = [
+    ("Fn (Globe)", "fn"),
     ("Right Option (⌥)", "right_option"),
     ("Right Command (⌘)", "right_cmd"),
     ("Right Shift (⇧)", "right_shift"),
@@ -264,7 +265,7 @@ textarea {{
         <div class="field">
             <label>Push-to-talk key</label>
             <select name="hotkey">{hotkey_options}</select>
-            <p class="hint">Hold to record, release to transcribe. Fn key cannot be captured (macOS limitation).</p>
+            <p class="hint">Hold to record, release to transcribe. Fn uses native macOS event monitoring.</p>
         </div>
     </div>
 
