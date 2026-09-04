@@ -1,212 +1,134 @@
-# Handy Dictation — Free Offline Speech-to-Text Setup
+# Dictation — Free Offline Push-to-Talk for macOS
 
-A fully local, zero-cost speech-to-text setup using [Handy](https://github.com/pais/handy) with Cohere Transcribe and Gemma 4B post-processing via Ollama. Built as a free replacement for WisprFlow.
+A fully local, zero-cost speech-to-text tool for macOS (Apple Silicon). Hold a key, speak, release — your words are transcribed and pasted into the focused app. No cloud, no subscription, no API keys.
 
-## What This Is
+Built with [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) (Metal GPU acceleration) for fast, accurate transcription entirely on-device.
 
-Configuration, scripts, and documentation for setting up high-quality offline dictation on macOS (Apple Silicon) using only free, local tools:
+## Features
 
-- **Handy** — Open-source dictation app (Tauri/Rust)
-- **Cohere Transcribe** — Speech-to-text model (runs locally in Handy)
-- **Ollama + Gemma 3 4B** — Local LLM for transcript cleanup (punctuation, spelling, filler word removal)
-
-Two-hotkey workflow: `fn` for instant raw transcription, `ctrl+space` for transcription + AI cleanup (~5s).
+- **Push-to-talk** — Hold Fn (or any configurable key) to record, release to transcribe + paste
+- **Fast** — Short recordings transcribe in ~1-2s, long recordings use progressive paste (first text in ~2s)
+- **Accurate** — Matches or exceeds Cohere Transcribe; never drops content on long recordings
+- **Custom vocabulary** — Teach it proper nouns, abbreviations, and technical terms
+- **Minimal overlay** — Tiny transparent pill shows recording/transcribing/done status
+- **Anti-hallucination** — Filters out Whisper's "Thanks for watching!" artifacts
+- **Settings UI** — Web-based config for hotkey, model, sounds, and vocabulary
+- **Auto-start** — Optional login item so it's always ready
 
 ## Quick Start
 
-### 1. Install Handy
-
-Download from [handy releases](https://github.com/pais/handy/releases) or build from source.
-
-### 2. Install Ollama
+### 1. Clone and install
 
 ```bash
-brew install ollama
-```
-
-Ollama auto-starts at login via Homebrew's launchd agent. Pull the cleanup model:
-
-```bash
-ollama pull gemma3:4b
-```
-
-### 3. Apply Configuration
-
-**Quit Handy first** (it overwrites config while running), then copy the config:
-
-```bash
-cp config/settings_store.json ~/Library/Application\ Support/com.pais.handy/settings_store.json
-```
-
-Or apply just the key settings manually in Handy's preferences.
-
-### 4. Keep Ollama Warm (Optional)
-
-To avoid cold-start delay (~18s) after idle periods, set keep-alive to 2 hours:
-
-```bash
-launchctl setenv OLLAMA_KEEP_ALIVE 2h
-brew services restart ollama
-```
-
-## Configuration Details
-
-### Keybindings
-
-| Key | Action | Speed |
-|-----|--------|-------|
-| `fn` (hold to talk) | Raw transcription — Cohere Transcribe only | ~1-2s |
-| `ctrl+space` (hold to talk) | Transcription + Gemma 4B cleanup | ~5s |
-| `escape` | Cancel recording | instant |
-
-### Transcription Model
-
-**Cohere Transcribe** (`cohere-transcribe-03-2026-Q5_K_M.gguf`) — best accuracy among tested models. Parakeet 0.6B was second.
-
-### Post-Processing
-
-- **Provider:** Ollama (Custom, `http://localhost:11434/v1`)
-- **Model:** `gemma3:4b` — best balance of speed and quality
-- **Prompt:** Cleans spelling, capitalization, punctuation, removes filler words, preserves meaning
-
-### Tuned Settings
-
-| Setting | Value | Why |
-|---------|-------|-----|
-| `selected_language` | `en` | Saves context tokens vs `auto` detection — reduces dropped words |
-| `word_correction_threshold` | `0.05` | Default `0.18` too aggressive — substitutes "started" → "StarDict". HIGHER = MORE AGGRESSIVE (not stricter). At `0.05`, only near-exact phonetic matches trigger. `0.9` is catastrophic — every word becomes a custom word |
-| `extra_recording_buffer_ms` | `500` | Catches trailing words that get cut off |
-| Custom words | 3 unique proper nouns | Only truly unique words (Prashil, XTEInk, CrossPoint) — technical terms handled by Gemma cleanup prompt instead |
-
-## Scripts
-
-### `scripts/add-custom-word.sh`
-
-Add words to Handy's custom word list from the terminal:
-
-```bash
-./scripts/add-custom-word.sh MyWord AnotherWord
-# Run with no args to list current words
-./scripts/add-custom-word.sh
-```
-
-### `scripts/switch-handy-provider.sh`
-
-Switch post-processing between Apple Intelligence and Ollama:
-
-```bash
-./scripts/switch-handy-provider.sh apple   # use Apple Intelligence
-./scripts/switch-handy-provider.sh ollama  # use Ollama/Gemma
-./scripts/switch-handy-provider.sh         # show current
-```
-
-### `scripts/fix-word-substitution.sh`
-
-Fix the custom word force-substitution bug (raises threshold, trims word list):
-
-```bash
-./scripts/fix-word-substitution.sh --dry-run  # preview changes
-./scripts/fix-word-substitution.sh             # apply (Handy must be quit)
-```
-
-### macOS Quick Action: "Add to Handy Words"
-
-Select any word → right-click → Services → "Add to Handy Words". Install:
-
-```bash
-bash scripts/install-add-word-service.sh
-```
-
-## Benchmarks (Apple M2, 16GB RAM)
-
-### Post-Processing Models Tested
-
-| Model | Short text | Long text | Quality | Verdict |
-|-------|-----------|-----------|---------|---------|
-| **gemma3:4b** | ~1.3s | ~3s | Excellent — follows instructions, preserves meaning | **Winner** |
-| gemma3:1b | ~1.4s | ~3s | Paraphrases too much, mangles technical terms | Not faster, worse quality |
-| gemma4:12b | ~15s | ~20s | Best quality but far too slow | Unusable for dictation |
-| qwen3:1.7b | N/A | N/A | Dumps chain-of-thought reasoning into output | Broken |
-| Apple Intelligence | ~0.5s | ~1s | Ignores cleanup instructions, summarizes instead of cleaning, adds "Sure," | Fast but unusable |
-
-### Key Findings
-
-- **Apple Intelligence** runs on Neural Engine (3-4x faster) but the on-device model is too small to follow system prompts — it summarizes instead of cleaning and adds conversational prefixes
-- **gemma3:1b** is not actually faster than 4B on Apple Silicon and produces worse output
-- **Cohere Transcribe** significantly outperforms Whisper-based models for accuracy
-- Cold start after 2h idle: ~18s (mitigated with `OLLAMA_KEEP_ALIVE=2h`)
-- The cleanup prompt must use contextual vocabulary hints, not forced substitutions — otherwise "StarDict" replaces the word "start"
-
-## Known Limitations
-
-1. **Custom words force-substitution** (FIXED) — Handy injects custom words into Whisper's `initial_prompt` AND applies post-hoc `word_correction_threshold` substitution. Words like "StarDict" aggressively replaced "started". At `0.9`, every word becomes a custom word. **Fix applied:** `word_correction_threshold` set to `0.05` (near-exact matches only — higher values are MORE aggressive, not stricter), `custom_words` trimmed to 3 truly unique proper nouns, and technical terms moved to the Gemma cleanup prompt where they're only used when context matches. Run `scripts/fix-word-substitution.sh` to re-apply if Handy reverts the config. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the full post-mortem.
-2. **Config overwrite** — Editing `settings_store.json` while Handy is quit works, but changing ANY setting in Handy's UI causes it to save its in-memory config, reverting all JSON edits. Make all changes at once when Handy is quit.
-3. **Dropped speech chunks** — Long dictation sometimes loses middle/end content. This is a VAD (Voice Activity Detection) chunking issue in the transcription engine. Mitigated by setting language to `en` (saves context tokens) and lowering `word_correction_threshold`.
-4. **5s cleanup delay** — Sum of transcription (~2s) + Gemma cleanup (~3s). Use `fn` for instant raw when speed matters.
-5. **Cold start** — First dictation after 2h idle takes ~18s while the model loads into memory.
-6. **Custom words don't auto-learn** — Must be added manually via the script or Quick Action. No correction-based learning yet.
-
-## Long Dictation Tool (Replaces Handy)
-
-Handy drops middle sections on recordings over ~30 seconds due to decoder token truncation (see [issue context](https://github.com/cjpais/Handy/pull/1882)). The `long-dictate.py` daemon replaces Handy entirely using mlx-whisper (Metal GPU acceleration) with silence-aware chunking. Accuracy matches or exceeds Cohere Transcribe — and it never drops content.
-
-### Setup
-
-```bash
+git clone https://github.com/terriblyoffendedmarketer-stack/handy-dictation.git
 cd handy-dictation
 python3 -m venv .venv
 source .venv/bin/activate
-pip install mlx-whisper sounddevice pyperclip pynput numpy
+pip install mlx-whisper sounddevice pyperclip pynput numpy pyobjc-framework-Cocoa pyobjc-framework-Quartz
 ```
 
-Grant accessibility permission to `Dictation.app` (or Terminal) in System Settings > Privacy & Security > Accessibility.
-
-### Usage
-
-Double-click `Dictation.app` to start, or:
+### 2. Install the app
 
 ```bash
-./scripts/dictate              # Start daemon (Right Option = push-to-talk)
-./scripts/dictate file.wav     # Transcribe an existing audio file
+bash scripts/install-app.sh
 ```
 
-Hold Right Option to record, release to transcribe and paste into the focused app. A floating overlay shows recording time, chunk progress, and completion status.
+This copies the runtime to `~/.dictation/` and installs `Dictation.app` to `/Applications/`.
 
-- Short recordings (<28s): single-pass transcription, ~1-2s
-- Long recordings (28s+): silence-aware chunking with progressive paste — first text appears in ~2s, subsequent chunks paste as they complete
-- Audio files saved to `~/Documents/Dictation/` for re-transcription
+### 3. Grant permissions
 
-### Accuracy
+Open **System Settings > Privacy & Security**:
+- **Accessibility** — Enable `Dictation.app`
+- **Microphone** — Allow when prompted on first recording
 
-Tested against Handy's Cohere Transcribe on the same audio files:
-- **46.9s recording**: virtually identical output
-- **54.8s recording**: mlx-whisper more accurate on ambiguous phrases
-- **75.2s recording**: Handy dropped the final third of the speech; mlx-whisper captured everything
+### 4. Launch
 
-## File Structure
+Double-click **Dictation.app** in `/Applications/`, or use Spotlight. First launch downloads the Whisper model (~1.5GB).
+
+### 5. Use it
+
+Hold **Fn** to record, release to transcribe and paste. That's it.
+
+## Configuration
+
+Double-click **Dictation.app** while the daemon is running to open the settings page, or run:
+
+```bash
+python3 ~/.dictation/settings.py
+```
+
+### Hotkey options
+
+| Key | Config value |
+|-----|-------------|
+| **Fn (Globe)** | `fn` (default) |
+| Right Option (⌥) | `right_option` |
+| Right Command (⌘) | `right_cmd` |
+| Caps Lock (⇪) | `caps_lock` |
+| F18–F20 | `f18`, `f19`, `f20` |
+
+If using Fn, set **System Settings > Keyboard > "Press Globe key to"** to **"Do Nothing"** so macOS doesn't intercept it.
+
+### Custom vocabulary
+
+Edit `~/.dictation/words.txt` — one word per line. Helps Whisper recognize proper nouns and technical terms (e.g., `EPUB`, `KOReader`, `Calibre`). Changes take effect on the next recording, no restart needed.
+
+### Config file
+
+`~/.dictation/config.json` — hotkey, model, language, start/stop sounds. Edit directly or use the settings UI.
+
+## Auto-start at login
+
+```bash
+bash scripts/install-autostart.sh          # enable
+bash scripts/install-autostart.sh remove   # disable
+```
+
+## How it works
+
+- **Model**: `whisper-medium` via mlx-whisper (Metal GPU, Apple Silicon)
+- **Short recordings** (<28s): single-pass transcription
+- **Long recordings** (28s+): split at silence boundaries (~25s chunks), each chunk transcribes and pastes progressively
+- **Overlay**: AppKit NSPanel — animated bars during recording, fraction progress during transcription, checkmark when done
+- **Fn key**: Captured via CGEventTap (Quartz) since pynput can't see modifier-only keys
+- **Anti-hallucination**: Trailing silence trimming + known phrase filter + `condition_on_previous_text=False`
+- Audio saved to `~/.dictation/recordings/` for re-transcription if needed
+
+## File structure
 
 ```
-├── README.md                  # This file
-├── TROUBLESHOOTING.md         # Detailed post-mortem on the word_correction_threshold bug
-├── Dictation.app/             # macOS app bundle — double-click to start daemon (LSUIElement, no dock icon)
-├── .venv/                     # Python virtual environment (mlx-whisper, sounddevice, pynput)
+├── Dictation.app/              # macOS app bundle (LSUIElement — no dock icon)
+├── scripts/
+│   ├── long-dictate.py         # Main daemon: push-to-talk, transcribe, overlay, paste
+│   ├── settings.py             # Web-based settings UI
+│   ├── dictate                 # Shell launcher (activates venv, runs daemon)
+│   ├── install-app.sh          # Install to /Applications + ~/.dictation/
+│   └── install-autostart.sh    # Add/remove Login Items auto-start
 ├── config/
-│   └── settings_store.json    # Handy configuration (copy to ~/Library/Application Support/com.pais.handy/)
-├── prompts/
-│   └── cleanup-prompt.txt     # The post-processing prompt used by Gemma
-└── scripts/
-    ├── dictate                # Shell launcher for long-dictate.py (activates venv)
-    ├── long-dictate.py        # Push-to-talk daemon: mlx-whisper + overlay + progressive paste
-    ├── add-custom-word.sh     # CLI to add custom words to Handy
-    ├── fix-word-substitution.sh  # Fix aggressive word substitution bug
-    ├── switch-handy-provider.sh  # Switch between Apple Intelligence and Ollama
-    └── install-add-word-service.sh  # Install macOS Quick Action for adding words
+│   └── settings_store.json     # Legacy Handy config (not used by this tool)
+└── scripts/                    # Legacy Handy scripts (add-custom-word, fix-word-substitution, etc.)
+```
+
+## Uninstall
+
+```bash
+bash scripts/install-app.sh remove
 ```
 
 ## Requirements
 
-- macOS (Apple Silicon recommended for Ollama performance)
-- [Handy](https://github.com/pais/handy) v0.9.1+
-- [Ollama](https://ollama.ai) with `gemma3:4b` model (~3.3 GB)
-- `jq` (for scripts): `brew install jq`
-- Python 3.10+ with venv (for long dictation tool)
+- macOS on Apple Silicon (M1/M2/M3/M4)
+- Python 3.10+
+- ~3GB disk for the Whisper model (downloaded on first run)
+- ~300MB RAM while running
+
+## Accuracy
+
+Tested against Handy's Cohere Transcribe on the same recordings:
+- **46.9s**: virtually identical output
+- **54.8s**: mlx-whisper more accurate on ambiguous phrases
+- **75.2s**: Handy dropped the final third; this tool captured everything
+
+## Background
+
+This started as a configuration repo for [Handy](https://github.com/pais/handy) (a Tauri/Rust dictation app). Handy works well for short recordings but drops content on long ones due to decoder token truncation. The `long-dictate.py` daemon was built as a replacement — it now handles all dictation with better accuracy and no content loss. The legacy Handy config and scripts remain in the repo for reference.
