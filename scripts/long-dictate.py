@@ -463,6 +463,9 @@ def paste_text(text, target_app=None):
 def transcribe_and_paste(audio, app_id=None):
     import mlx_whisper
 
+    global INITIAL_PROMPT
+    INITIAL_PROMPT = load_custom_words()
+
     os.makedirs(wav_dir, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     wav_path = os.path.join(wav_dir, f"dictation-{timestamp}.wav")

@@ -5,7 +5,7 @@
 **Phase: Working tool, ready for daily use.**
 Dictation daemon replaces Handy — Right Option push-to-talk, mlx-whisper medium on Metal GPU, silence-aware chunking, progressive paste, minimal floating overlay, anti-hallucination filtering.
 
-**Current:** All core features complete. Auto-start at login ready to install. Accuracy matches/exceeds Cohere Transcribe. Hallucination fix (trailing silence trim + phrase filter + condition_on_previous_text=False) deployed.
+**Current:** All core features complete. Custom vocabulary support (words.txt → initial_prompt). Web-based settings UI for hotkey, model, sounds, and vocabulary. Config/vocab live in ~/.dictation/. Auto-start at login via Login Items.
 
 **Next:** Monitor accuracy in daily use. Consider post-processing via Ollama for grammar cleanup if needed.
 
@@ -21,15 +21,21 @@ Dictation daemon replaces Handy — Right Option push-to-talk, mlx-whisper mediu
 - [x] Floating overlay — animated bars during recording, chunk progress, checkmark done
 - [x] Accuracy comparison vs Cohere Transcribe
 - [x] Anti-hallucination: trailing silence trim + phrase filter + condition_on_previous_text=False
-- [x] Auto-start at login (launchd agent)
+- [x] Auto-start at login (Login Items via osascript)
+- [x] Custom vocabulary (words.txt → whisper initial_prompt)
+- [x] Configurable hotkey, model, sounds (config.json)
+- [x] Web-based settings UI (scripts/settings.py)
+- [x] Runtime files in ~/.dictation/ (avoids TCC restrictions)
 
 ## File Map
 
 - `Dictation.app/` — macOS .app bundle. Double-click to start. LSUIElement (no dock icon). Needs Accessibility permission.
 - `scripts/long-dictate.py` — Main daemon. Push-to-talk, mlx-whisper, chunking, overlay, anti-hallucination, progressive paste.
 - `scripts/dictate` — Shell launcher that activates .venv and runs long-dictate.py.
-- `scripts/install-autostart.sh` — Add/remove auto-start at login via launchd.
-- `com.local.dictation.plist` — launchd agent config for auto-start.
+- `scripts/install-app.sh` — Install runtime to ~/.dictation/ and app to /Applications/.
+- `scripts/install-autostart.sh` — Add/remove auto-start at login via Login Items.
+- `scripts/settings.py` — Web-based settings GUI (hotkey, model, sounds, vocabulary).
+- `com.local.dictation.plist` — launchd agent config (legacy, not used — Login Items preferred).
 - `.venv/` — Python venv: mlx-whisper, sounddevice, pyperclip, pynput, numpy.
 - `config/settings_store.json` — Handy app config (legacy).
 - `prompts/cleanup-prompt.txt` — Gemma post-processing prompt (legacy, for Handy's ctrl+space mode).

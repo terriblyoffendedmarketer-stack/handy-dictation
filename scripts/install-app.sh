@@ -27,6 +27,7 @@ pkill -f "long-dictate.py" 2>/dev/null
 # Copy runtime files
 mkdir -p "$RUNTIME_DIR"
 cp "$PROJECT_DIR/scripts/long-dictate.py" "$RUNTIME_DIR/"
+cp "$PROJECT_DIR/scripts/settings.py" "$RUNTIME_DIR/"
 if [ ! -d "$RUNTIME_DIR/.venv" ]; then
     echo "  Copying venv (first install, ~1.4GB)..."
     cp -R "$PROJECT_DIR/.venv" "$RUNTIME_DIR/.venv"
@@ -51,6 +52,29 @@ xattr -cr "$APP_DST"
 
 # Update recording path in runtime copy
 sed -i '' 's|~/Documents/Dictation|~/.dictation/recordings|' "$RUNTIME_DIR/long-dictate.py"
+
+# Create default config/words if not present
+if [ ! -f "$RUNTIME_DIR/config.json" ]; then
+    cat > "$RUNTIME_DIR/config.json" << 'CFGEOF'
+{
+    "hotkey": "right_option",
+    "model": "mlx-community/whisper-medium-mlx",
+    "language": "en",
+    "sound_start": "/System/Library/Sounds/Tink.aiff",
+    "sound_stop": "/System/Library/Sounds/Pop.aiff"
+}
+CFGEOF
+    echo "  Created default config.json"
+fi
+
+if [ ! -f "$RUNTIME_DIR/words.txt" ]; then
+    cat > "$RUNTIME_DIR/words.txt" << 'WORDSEOF'
+# Custom vocabulary — one word or phrase per line
+# These help Whisper recognize proper nouns, abbreviations, and technical terms.
+# Edit via: python3 ~/.dictation/settings.py
+WORDSEOF
+    echo "  Created default words.txt"
+fi
 
 echo "  Installed to /Applications/Dictation.app"
 echo ""
