@@ -1,0 +1,14 @@
+#!/bin/bash
+# dictate — Push-to-talk dictation daemon
+# Usage: ./scripts/dictate              (start daemon, Right Option = push-to-talk)
+#        ./scripts/dictate file.wav     (transcribe a file)
+#        DICTATION_KEY=right_cmd ./scripts/dictate  (use different hotkey)
+#        WHISPER_MODEL=mlx-community/whisper-large-v3-turbo-mlx ./scripts/dictate
+#
+# Requires Accessibility permission: System Settings > Privacy & Security > Accessibility
+# Add Terminal.app (or whichever terminal you use)
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$PROJECT_DIR/.venv/bin/activate"
+exec python3 "$SCRIPT_DIR/long-dictate.py" "$@"

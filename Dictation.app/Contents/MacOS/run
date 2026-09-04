@@ -1,0 +1,9 @@
+#!/bin/bash
+# Wrapper that launches the dictation daemon inside this .app context
+# so macOS grants accessibility + microphone permissions to "Dictation.app"
+# Uses absolute paths so the app can live anywhere (~/Applications, /Applications, etc.)
+
+PROJECT_DIR="/Users/apple/Documents/Claude Code/handy-dictation"
+
+source "$PROJECT_DIR/.venv/bin/activate"
+exec python3 "$PROJECT_DIR/scripts/long-dictate.py" "$@"

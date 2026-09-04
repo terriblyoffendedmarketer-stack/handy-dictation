@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.local.dictation</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/apple/Documents/Claude Code/handy-dictation/Dictation.app/Contents/MacOS/run</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/dictation.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/dictation.log</string>
+</dict>
+</plist>

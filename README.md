@@ -146,17 +146,58 @@ bash scripts/install-add-word-service.sh
 5. **Cold start** — First dictation after 2h idle takes ~18s while the model loads into memory.
 6. **Custom words don't auto-learn** — Must be added manually via the script or Quick Action. No correction-based learning yet.
 
+## Long Dictation Tool (Replaces Handy)
+
+Handy drops middle sections on recordings over ~30 seconds due to decoder token truncation (see [issue context](https://github.com/cjpais/Handy/pull/1882)). The `long-dictate.py` daemon replaces Handy entirely using mlx-whisper (Metal GPU acceleration) with silence-aware chunking. Accuracy matches or exceeds Cohere Transcribe — and it never drops content.
+
+### Setup
+
+```bash
+cd handy-dictation
+python3 -m venv .venv
+source .venv/bin/activate
+pip install mlx-whisper sounddevice pyperclip pynput numpy
+```
+
+Grant accessibility permission to `Dictation.app` (or Terminal) in System Settings > Privacy & Security > Accessibility.
+
+### Usage
+
+Double-click `Dictation.app` to start, or:
+
+```bash
+./scripts/dictate              # Start daemon (Right Option = push-to-talk)
+./scripts/dictate file.wav     # Transcribe an existing audio file
+```
+
+Hold Right Option to record, release to transcribe and paste into the focused app. A floating overlay shows recording time, chunk progress, and completion status.
+
+- Short recordings (<28s): single-pass transcription, ~1-2s
+- Long recordings (28s+): silence-aware chunking with progressive paste — first text appears in ~2s, subsequent chunks paste as they complete
+- Audio files saved to `~/Documents/Dictation/` for re-transcription
+
+### Accuracy
+
+Tested against Handy's Cohere Transcribe on the same audio files:
+- **46.9s recording**: virtually identical output
+- **54.8s recording**: mlx-whisper more accurate on ambiguous phrases
+- **75.2s recording**: Handy dropped the final third of the speech; mlx-whisper captured everything
+
 ## File Structure
 
 ```
 ├── README.md                  # This file
 ├── TROUBLESHOOTING.md         # Detailed post-mortem on the word_correction_threshold bug
+├── Dictation.app/             # macOS app bundle — double-click to start daemon (LSUIElement, no dock icon)
+├── .venv/                     # Python virtual environment (mlx-whisper, sounddevice, pynput)
 ├── config/
 │   └── settings_store.json    # Handy configuration (copy to ~/Library/Application Support/com.pais.handy/)
 ├── prompts/
 │   └── cleanup-prompt.txt     # The post-processing prompt used by Gemma
 └── scripts/
-    ├── add-custom-word.sh     # CLI to add custom words
+    ├── dictate                # Shell launcher for long-dictate.py (activates venv)
+    ├── long-dictate.py        # Push-to-talk daemon: mlx-whisper + overlay + progressive paste
+    ├── add-custom-word.sh     # CLI to add custom words to Handy
     ├── fix-word-substitution.sh  # Fix aggressive word substitution bug
     ├── switch-handy-provider.sh  # Switch between Apple Intelligence and Ollama
     └── install-add-word-service.sh  # Install macOS Quick Action for adding words
@@ -168,3 +209,4 @@ bash scripts/install-add-word-service.sh
 - [Handy](https://github.com/pais/handy) v0.9.1+
 - [Ollama](https://ollama.ai) with `gemma3:4b` model (~3.3 GB)
 - `jq` (for scripts): `brew install jq`
+- Python 3.10+ with venv (for long dictation tool)
