@@ -69,7 +69,7 @@ KEY_MAP = {
 def load_config():
     cfg = {
         "hotkey": "fn",
-        "model": "mlx-community/whisper-large-v3-turbo",
+        "model": "mlx-community/whisper-medium-mlx",
         "language": "en",
         "sound_start": "/System/Library/Sounds/Tink.aiff",
         "sound_stop": "/System/Library/Sounds/Pop.aiff",
