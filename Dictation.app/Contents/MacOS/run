@@ -1,14 +1,32 @@
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DICTATION_DIR="$HOME/.dictation"
+PYTHON="$DICTATION_DIR/.venv/bin/python3"
 
 # If daemon is NOT running, start it in the background
 if ! pgrep -f "long-dictate.py" > /dev/null 2>&1; then
-    source "$DICTATION_DIR/.venv/bin/activate"
-    python3 "$DICTATION_DIR/long-dictate.py" > /tmp/dictation.log 2>&1 &
+    "$PYTHON" "$DICTATION_DIR/long-dictate.py" > /tmp/dictation.log 2>&1 &
     sleep 1
 fi
 
-# Always open settings UI
-source "$DICTATION_DIR/.venv/bin/activate"
-exec python3 "$DICTATION_DIR/settings.py" "$@"
+# If settings server is already running, just open the browser
+if /usr/bin/curl -s -o /dev/null http://localhost:9876/ 2>/dev/null; then
+    /usr/bin/open "http://localhost:9876"
+    exit 0
+fi
+
+# Start settings server in background
+"$PYTHON" "$DICTATION_DIR/settings.py" > /tmp/dictation-settings.log 2>&1 &
+SETTINGS_PID=$!
+
+# Wait for server to be ready (up to 5s), then open browser
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    if /usr/bin/curl -s -o /dev/null http://localhost:9876/ 2>/dev/null; then
+        /usr/bin/open "http://localhost:9876"
+        break
+    fi
+    sleep 0.5
+done
+
+# Keep running until settings server exits
+wait $SETTINGS_PID

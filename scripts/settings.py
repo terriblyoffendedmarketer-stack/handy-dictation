@@ -37,9 +37,9 @@ HOTKEY_OPTIONS = [
 ]
 
 MODEL_OPTIONS = [
-    ("Whisper Medium — best punctuation", "mlx-community/whisper-medium-mlx"),
-    ("Whisper Large v3 Turbo — faster", "mlx-community/whisper-large-v3-turbo"),
-    ("Whisper Large v3 — most accurate", "mlx-community/whisper-large-v3-mlx"),
+    ("Distil Whisper Large v3 — best accuracy (recommended)", "mlx-community/distil-whisper-large-v3"),
+    ("Whisper Medium — good accuracy, small model", "mlx-community/whisper-medium-mlx"),
+    ("Whisper Large v3 — slowest, most RAM", "mlx-community/whisper-large-v3-mlx"),
 ]
 
 SYSTEM_SOUNDS = [
@@ -51,7 +51,7 @@ SYSTEM_SOUNDS = [
 def load_config():
     cfg = {
         "hotkey": "fn",
-        "model": "mlx-community/whisper-medium-mlx",
+        "model": "mlx-community/distil-whisper-large-v3",
         "language": "en",
         "sound_start": "/System/Library/Sounds/Tink.aiff",
         "sound_stop": "/System/Library/Sounds/Pop.aiff",
@@ -284,7 +284,7 @@ textarea {{
         <div class="field">
             <label>Whisper model</label>
             <select name="model">{model_options}</select>
-            <p class="hint">Large v3 is most accurate but uses ~3GB more RAM and is slower. Medium is the best balance.</p>
+            <p class="hint">Distil Large v3 is the most accurate on your audio (16.9% WER). Medium is a close second (18.1% WER).</p>
         </div>
     </div>
 
@@ -420,7 +420,8 @@ document.getElementById('settingsForm').addEventListener('submit', function(e) {
         body: new URLSearchParams(formData),
     }}).then(r => r.json()).then(data => {{
         if (data.ok) {{
-            showToast('Settings saved. Restart daemon for hotkey/model changes.', 'success');
+            const msg = data.restarted ? 'Settings saved. Daemon restarting with new config...' : 'Settings saved.';
+            showToast(msg, 'success');
         }} else {{
             showToast('Error: ' + data.error, 'error');
         }}
@@ -508,7 +509,8 @@ class SettingsHandler(BaseHTTPRequestHandler):
         params = urllib.parse.parse_qs(body)
 
         try:
-            config = load_config()
+            old_config = load_config()
+            config = dict(old_config)
             config["hotkey"] = params.get("hotkey", ["fn"])[0]
             config["model"] = params.get("model", [config["model"]])[0]
 
@@ -522,7 +524,25 @@ class SettingsHandler(BaseHTTPRequestHandler):
             words = params.get("words", [""])[0]
             save_words(words)
 
-            self._json({"ok": True})
+            needs_restart = (
+                config["hotkey"] != old_config.get("hotkey")
+                or config["model"] != old_config.get("model")
+            )
+            restarted = False
+            if needs_restart and is_daemon_running():
+                subprocess.run(["pkill", "-f", "long-dictate.py"], capture_output=True)
+                import time
+                time.sleep(1)
+                venv_python = os.path.join(DICTATION_DIR, ".venv", "bin", "python3")
+                daemon_script = os.path.join(DICTATION_DIR, "long-dictate.py")
+                subprocess.Popen(
+                    [venv_python, daemon_script],
+                    stdout=open("/tmp/dictation.log", "w"),
+                    stderr=subprocess.STDOUT,
+                )
+                restarted = True
+
+            self._json({"ok": True, "restarted": restarted})
         except Exception as e:
             self._json({"ok": False, "error": str(e)}, status=500)
 
@@ -546,11 +566,8 @@ def main():
         print("Could not bind to any port")
         sys.exit(1)
 
-    server.timeout = 600
-
     url = f"http://localhost:{port}"
     print(f"Dictation Settings: {url}")
-    webbrowser.open(url)
     print("Press Ctrl+C to stop")
 
     try:

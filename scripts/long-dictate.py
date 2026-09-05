@@ -399,12 +399,26 @@ def trim_trailing_silence(audio, threshold=0.008, buffer_s=0.3):
 HALLUCINATION_TAILS = [
     "thanks for watching",
     "thank you for watching",
+    "thank you.",
+    "thank you!",
     "please subscribe",
     "like and subscribe",
     "see you next time",
     "see you in the next video",
     "don't forget to subscribe",
     "subscribe to the channel",
+]
+
+HALLUCINATION_PATTERNS = [
+    "please provide",
+    "i need the original",
+    "i need the text",
+    "here's the corrected",
+    "let me know if",
+    "feel free to",
+    "i'll deliver the",
+    "once you paste",
+    "is there anything else",
 ]
 
 
@@ -415,15 +429,21 @@ def strip_hallucinations(text):
         if lower.endswith(phrase):
             text = stripped[: -len(phrase)].rstrip(" .,!?")
             break
+    # Detect AI-assistant-style hallucinations (whole segments of invented text)
+    for pattern in HALLUCINATION_PATTERNS:
+        if pattern in text.lower():
+            print(f"  [!] Hallucination detected: '{pattern}' — dropping segment", flush=True)
+            return ""
     return text.strip()
 
 
 def llm_cleanup(text):
-    if not CONFIG.get("llm_cleanup") or not text:
+    config = load_config()
+    if not config.get("llm_cleanup") or not text:
         return text
     try:
         import urllib.request
-        model = CONFIG.get("llm_model", "gemma3:4b")
+        model = config.get("llm_model", "gemma3:4b")
         payload = json.dumps({
             "model": model,
             "messages": [
@@ -443,7 +463,7 @@ def llm_cleanup(text):
             data=payload,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read())
             cleaned = result["choices"][0]["message"]["content"].strip()
             if cleaned and len(cleaned) > len(text) * 0.3:
@@ -451,6 +471,30 @@ def llm_cleanup(text):
     except Exception as e:
         print(f"  (LLM cleanup failed: {e})", flush=True)
     return text
+
+
+def warmup_llm():
+    """Ping Ollama to pre-load the LLM so first cleanup isn't slow."""
+    try:
+        import urllib.request
+        config = load_config()
+        if not config.get("llm_cleanup"):
+            return
+        model = config.get("llm_model", "gemma3:4b")
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": False,
+        }).encode()
+        req = urllib.request.Request(
+            "http://localhost:11434/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=30)
+        print(" LLM ready.", end="", flush=True)
+    except Exception:
+        pass
 
 
 def save_wav(audio, path):
@@ -599,6 +643,8 @@ def run_daemon():
     t0 = time.time()
     load_model()
     print(f" ready ({time.time()-t0:.1f}s)")
+
+    threading.Thread(target=warmup_llm, daemon=True).start()
 
     import AppKit
 
