@@ -2,13 +2,13 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DICTATION_DIR="$HOME/.dictation"
 
-# If daemon is already running, open settings instead
-if pgrep -f "long-dictate.py" > /dev/null 2>&1; then
+# If daemon is NOT running, start it in the background
+if ! pgrep -f "long-dictate.py" > /dev/null 2>&1; then
     source "$DICTATION_DIR/.venv/bin/activate"
-    exec python3 "$DICTATION_DIR/settings.py" "$@"
+    python3 "$DICTATION_DIR/long-dictate.py" > /tmp/dictation.log 2>&1 &
+    sleep 1
 fi
 
-# Otherwise start the daemon
-exec > /tmp/dictation.log 2>&1
+# Always open settings UI
 source "$DICTATION_DIR/.venv/bin/activate"
-exec python3 "$DICTATION_DIR/long-dictate.py" "$@"
+exec python3 "$DICTATION_DIR/settings.py" "$@"

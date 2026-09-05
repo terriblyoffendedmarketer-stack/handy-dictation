@@ -68,11 +68,13 @@ KEY_MAP = {
 
 def load_config():
     cfg = {
-        "hotkey": "right_option",
-        "model": "mlx-community/whisper-medium-mlx",
+        "hotkey": "fn",
+        "model": "mlx-community/whisper-large-v3-turbo",
         "language": "en",
         "sound_start": "/System/Library/Sounds/Tink.aiff",
         "sound_stop": "/System/Library/Sounds/Pop.aiff",
+        "llm_cleanup": False,
+        "llm_model": "gemma3:4b",
     }
     if os.path.exists(CONFIG_PATH):
         try:
@@ -416,6 +418,41 @@ def strip_hallucinations(text):
     return text.strip()
 
 
+def llm_cleanup(text):
+    if not CONFIG.get("llm_cleanup") or not text:
+        return text
+    try:
+        import urllib.request
+        model = CONFIG.get("llm_model", "gemma3:4b")
+        payload = json.dumps({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": (
+                    "Fix transcription errors in the following dictated text. "
+                    "Fix spelling, capitalization, and punctuation. "
+                    "Remove filler words (um, uh, like, you know) only when they add nothing. "
+                    "Keep the meaning and tone exactly the same. "
+                    "Output ONLY the corrected text, nothing else."
+                )},
+                {"role": "user", "content": text},
+            ],
+            "stream": False,
+        }).encode()
+        req = urllib.request.Request(
+            "http://localhost:11434/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            result = json.loads(resp.read())
+            cleaned = result["choices"][0]["message"]["content"].strip()
+            if cleaned and len(cleaned) > len(text) * 0.3:
+                return cleaned
+    except Exception as e:
+        print(f"  (LLM cleanup failed: {e})", flush=True)
+    return text
+
+
 def save_wav(audio, path):
     audio_int16 = (audio * 32767).astype(np.int16)
     with wave.open(path, "w") as wf:
@@ -485,7 +522,6 @@ def transcribe_and_paste(audio, app_id=None):
         hallucination_silence_threshold=2.0,
         temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
         compression_ratio_threshold=2.4,
-        beam_size=5,
     )
     if INITIAL_PROMPT:
         transcribe_opts["initial_prompt"] = INITIAL_PROMPT
@@ -495,6 +531,7 @@ def transcribe_and_paste(audio, app_id=None):
         result = mlx_whisper.transcribe(audio, **transcribe_opts)
         elapsed = time.time() - t0
         text = strip_hallucinations(result["text"].strip())
+        text = llm_cleanup(text)
 
         if text:
             paste_text(text, target_app=app_id)
@@ -509,6 +546,7 @@ def transcribe_and_paste(audio, app_id=None):
                 overlay.show_transcribing(i + 1, n)
             result = mlx_whisper.transcribe(chunk, **transcribe_opts)
             text = strip_hallucinations(result["text"].strip())
+            text = llm_cleanup(text)
 
             if text:
                 all_text.append(text)
