@@ -627,6 +627,18 @@ def run_daemon():
                     target=transcribe_and_paste, args=(audio, app_id), daemon=True
                 ).start()
 
+    # Watchdog: if recording runs >5min, force release (stuck state protection)
+    MAX_RECORDING_S = 300
+
+    def check_stuck_recording():
+        if recording and record_start and (time.time() - record_start > MAX_RECORDING_S):
+            print("  [!] Recording exceeded 5min — force stopping", flush=True)
+            handle_release()
+
+    recording_timer = AppKit.NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
+        30.0, True, lambda t: check_stuck_recording()
+    )
+
     if HOTKEY_NAME == "fn":
         import Quartz
         FN_FLAG = 0x800000
@@ -659,6 +671,17 @@ def run_daemon():
             )
             Quartz.CGEventTapEnable(tap, True)
             print("  Fn key: CGEventTap active", flush=True)
+
+            # macOS disables event taps when the process is slow to respond.
+            # Re-enable periodically so Fn detection doesn't silently die.
+            def reenable_tap():
+                if not Quartz.CGEventTapIsEnabled(tap):
+                    print("  [!] CGEventTap was disabled — re-enabling", flush=True)
+                    Quartz.CGEventTapEnable(tap, True)
+
+            tap_timer = AppKit.NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
+                5.0, True, lambda t: reenable_tap()
+            )
         else:
             print("  ERROR: CGEventTap failed — check Accessibility permission", flush=True)
     else:
