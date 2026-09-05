@@ -1,4 +1,5 @@
 #!/bin/bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DICTATION_DIR="$HOME/.dictation"
 
 # If daemon is already running, open settings instead

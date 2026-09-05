@@ -479,20 +479,22 @@ def transcribe_and_paste(audio, app_id=None):
     if overlay:
         overlay.show_transcribing(1, n)
 
+    transcribe_opts = dict(
+        path_or_hf_repo=MODEL_REPO, language="en",
+        condition_on_previous_text=False,
+        hallucination_silence_threshold=2.0,
+        temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+        compression_ratio_threshold=2.4,
+        beam_size=5,
+    )
+    if INITIAL_PROMPT:
+        transcribe_opts["initial_prompt"] = INITIAL_PROMPT
+
     if n == 1:
-        tmp = tempfile.mktemp(suffix=".wav")
-        save_wav(audio, tmp)
         t0 = time.time()
-        transcribe_opts = dict(
-            path_or_hf_repo=MODEL_REPO, language="en",
-            condition_on_previous_text=False,
-        )
-        if INITIAL_PROMPT:
-            transcribe_opts["initial_prompt"] = INITIAL_PROMPT
-        result = mlx_whisper.transcribe(tmp, **transcribe_opts)
+        result = mlx_whisper.transcribe(audio, **transcribe_opts)
         elapsed = time.time() - t0
         text = strip_hallucinations(result["text"].strip())
-        os.unlink(tmp)
 
         if text:
             paste_text(text, target_app=app_id)
@@ -502,20 +504,11 @@ def transcribe_and_paste(audio, app_id=None):
     else:
         print(f"  {n} chunks |", end="", flush=True)
         all_text = []
-        transcribe_opts = dict(
-            path_or_hf_repo=MODEL_REPO, language="en",
-            condition_on_previous_text=False,
-        )
-        if INITIAL_PROMPT:
-            transcribe_opts["initial_prompt"] = INITIAL_PROMPT
         for i, chunk in enumerate(chunks):
             if overlay:
                 overlay.show_transcribing(i + 1, n)
-            tmp = tempfile.mktemp(suffix=".wav")
-            save_wav(chunk, tmp)
-            result = mlx_whisper.transcribe(tmp, **transcribe_opts)
+            result = mlx_whisper.transcribe(chunk, **transcribe_opts)
             text = strip_hallucinations(result["text"].strip())
-            os.unlink(tmp)
 
             if text:
                 all_text.append(text)
@@ -533,11 +526,8 @@ def transcribe_and_paste(audio, app_id=None):
 def load_model():
     import mlx_whisper
 
-    tmp = tempfile.mktemp(suffix=".wav")
     silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
-    save_wav(silence, tmp)
-    mlx_whisper.transcribe(tmp, path_or_hf_repo=MODEL_REPO, language="en")
-    os.unlink(tmp)
+    mlx_whisper.transcribe(silence, path_or_hf_repo=MODEL_REPO, language="en")
 
 
 def transcribe_file(filepath):

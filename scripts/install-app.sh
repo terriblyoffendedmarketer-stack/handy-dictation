@@ -40,6 +40,7 @@ cp -R "$APP_SRC" "$APP_DST"
 # Fix run script to use runtime dir
 cat > "$APP_DST/Contents/MacOS/run" << 'RUNEOF'
 #!/bin/bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DICTATION_DIR="$HOME/.dictation"
 
 # If daemon is already running, open settings instead
