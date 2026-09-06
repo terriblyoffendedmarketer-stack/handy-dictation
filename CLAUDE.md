@@ -2,12 +2,12 @@
 
 ## Status
 
-**Phase: Daily driver, accuracy optimization in progress.**
-Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, silence-aware chunking, progressive paste, minimal floating overlay, anti-hallucination filtering, web-based settings UI.
+**Phase: Self-learning infrastructure complete, collecting corrections.**
+Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, silence-aware chunking, progressive paste, minimal floating overlay, anti-hallucination filtering, web-based settings UI, transcription history with correction-based self-learning.
 
-**Current:** All core features complete. Benchmark run across 6 models (37 recordings). whisper-medium is the production model — best balance of accuracy (18.1% WER) and no hallucination. CGEventTap auto-re-enable fix for daemon reliability.
+**Current:** Phase 3a complete. Daemon logs every transcription. History tab in settings UI lets user play audio, correct transcriptions, and save corrections. Word-level diffs mine auto-substitution rules (applied post-transcription). Corrected proper nouns auto-added to whisper initial_prompt vocabulary.
 
-**Next:** Voice-level self-learning (speaker-adapted ASR). See Roadmap Phase 3.
+**Next:** Use the tool daily and correct errors to build substitution corpus. Phase 3b: fine-tune whisper-medium once enough correction pairs accumulated (50+).
 
 ## Critical Learnings (DO NOT re-test — these are settled)
 
@@ -23,8 +23,11 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - **NSEvent monitor objects get garbage collected** by Python — causes Fn detection to silently stop. CGEventTap approach is required.
 - **ffmpeg not on PATH when launched from .app.** Must either set PATH in launcher or pass numpy arrays directly.
 - **`source activate` breaks in .app context** when venv path has spaces. Call venv python directly instead.
+- **Backgrounded processes die when .app exits.** macOS sends SIGHUP to the .app's process group. Use `nohup` + `disown` in run script, `start_new_session=True` in subprocess.Popen from settings.py.
 - **LLM cleanup via Ollama adds 8-15s latency.** gemma3:4b times out at 8s on cold start. Currently disabled. Needs model warmup and longer timeout (15s) if re-enabled.
 - **General WER benchmarks don't reflect real-world accuracy** for this user. Trust actual test results over published numbers.
+- **Post-transcription substitution works well for consistent misrecognitions.** Word-level diffs from user corrections reliably capture proper noun errors. Combined with auto-vocabulary update (feeding corrected words back to initial_prompt), this gives a two-layer fix: whisper prompt biasing + post-processing substitution.
+- **Punctuation must be stripped before word-level diffing.** Without stripping, "tool." vs "EPUB." produces substitutions with embedded periods that break regex matching.
 
 ## Roadmap
 
@@ -51,26 +54,33 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - [x] Auto-restart daemon on model/hotkey change from settings
 - [x] Benchmark script (37 recordings, 6 models tested)
 
-### Phase 3: Voice-Level Self-Learning [PLANNED]
-Goal: Personalized ASR — the tool learns how the user pronounces specific words.
-- [ ] Correction collection: detect when user corrects transcribed text, save audio-correction pairs
-- [ ] Audio fingerprint database: map audio segments to correct transcriptions
-- [ ] Fine-tune whisper-medium on user's audio-correction pairs
-- [ ] Evaluate if fine-tuned model improves proper noun recognition (Seedhe Maut, etc.)
+### Phase 3a: Self-Learning Infrastructure [DONE]
+- [x] Transcription logging: daemon saves every transcription to transcription-log.json
+- [x] History tab in settings UI: browse transcriptions, play audio, edit text
+- [x] Correction storage: save corrected transcriptions to corrections.json
+- [x] Auto-substitution: mine word-level diffs from corrections → substitutions.json
+- [x] Post-transcription substitution: daemon applies learned substitutions after whisper
+- [x] Auto-vocabulary: corrected proper nouns added to words.txt → whisper initial_prompt
+- [x] Punctuation-aware diffing: strips punctuation before comparing words
+
+### Phase 3b: Fine-Tuning [PLANNED]
+Goal: Fine-tune whisper-medium on user's audio-correction pairs for proper nouns.
+- [ ] Accumulate 50+ correction pairs through daily use
+- [ ] Fine-tune whisper-medium on user's audio-correction pairs via mlx
+- [ ] Evaluate if fine-tuned model improves proper noun recognition
 - [ ] Integration: load fine-tuned model weights at daemon startup
 
 Approach notes:
-- Custom words/initial_prompt has limited effectiveness for unusual nouns
-- LLM post-processing can't fix it — transcript is too far from actual speech for LLM to infer
-- Need audio-level solution: either fine-tuning or audio similarity matching
-- User's 37+ recordings in ~/.dictation/recordings/ are a starting corpus
-- Ground truth for all recordings saved in ~/.dictation/ground-truth.json
+- Phase 3a substitutions give immediate improvement without fine-tuning
+- Fine-tuning needs sufficient data (50+ diverse correction pairs)
+- User's 89+ recordings in ~/.dictation/recordings/ are a starting corpus
+- Ground truth for 38 recordings saved in ~/.dictation/ground-truth.json
 
 ## File Map
 
 - `Dictation.app/` — macOS .app bundle. Double-click opens settings, starts daemon if needed.
 - `scripts/long-dictate.py` — Main daemon. Push-to-talk, mlx-whisper, chunking, overlay, hallucination filter, CGEventTap.
-- `scripts/settings.py` — Web-based settings GUI (hotkey, model, sounds, vocabulary, LLM toggle, daemon control).
+- `scripts/settings.py` — Web-based settings GUI (hotkey, model, sounds, vocabulary, LLM toggle, daemon control, transcription history with correction UI).
 - `scripts/benchmark.py` — Accuracy benchmark. Ground truth via large-v3, compares models by WER.
 - `scripts/dictate` — Shell launcher for terminal use.
 - `scripts/install-app.sh` — Install runtime to ~/.dictation/ and app to /Applications/.
@@ -84,8 +94,11 @@ Approach notes:
 - `config.json` — Runtime config (hotkey, model, sounds, llm_cleanup)
 - `words.txt` — Custom vocabulary
 - `.venv/` — Python virtual environment
-- `recordings/` — Saved audio (37+ WAV files)
-- `ground-truth.json` — Large-v3 transcriptions for all recordings
+- `recordings/` — Saved audio (89+ WAV files)
+- `transcription-log.json` — Log of all daemon transcriptions (file, text, duration, model, timestamp)
+- `corrections.json` — User-corrected transcriptions (keyed by WAV filename)
+- `substitutions.json` — Auto-mined word substitution rules from corrections
+- `ground-truth.json` — Large-v3 transcriptions for 38 recordings
 - `benchmark-results.json` — WER results per model
 
 ## Setup & Run

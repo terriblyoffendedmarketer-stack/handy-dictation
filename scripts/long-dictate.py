@@ -50,6 +50,8 @@ CHUNK_SEARCH_S = 3
 DICTATION_DIR = os.path.expanduser("~/.dictation")
 CONFIG_PATH = os.path.join(DICTATION_DIR, "config.json")
 WORDS_PATH = os.path.join(DICTATION_DIR, "words.txt")
+LOG_PATH = os.path.join(DICTATION_DIR, "transcription-log.json")
+SUBSTITUTIONS_PATH = os.path.join(DICTATION_DIR, "substitutions.json")
 
 KEY_MAP = {
     "right_option": keyboard.Key.alt_r,
@@ -98,6 +100,50 @@ def load_custom_words():
     if not words:
         return ""
     return ", ".join(words) + "."
+
+
+def log_transcription(wav_filename, text, duration):
+    log = []
+    if os.path.exists(LOG_PATH):
+        try:
+            with open(LOG_PATH) as f:
+                log = json.load(f)
+        except Exception:
+            log = []
+    log.append({
+        "file": wav_filename,
+        "text": text,
+        "duration": round(duration, 1),
+        "model": MODEL_REPO,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    log = log[-500:]
+    try:
+        with open(LOG_PATH, "w") as f:
+            json.dump(log, f, indent=2)
+    except Exception:
+        pass
+
+
+def load_substitutions():
+    if os.path.exists(SUBSTITUTIONS_PATH):
+        try:
+            with open(SUBSTITUTIONS_PATH) as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def apply_substitutions(text):
+    import re
+    subs = load_substitutions()
+    if not subs:
+        return text
+    for orig, replacement in subs.items():
+        pattern = re.compile(r'\b' + re.escape(orig) + r'\b', re.IGNORECASE)
+        text = pattern.sub(replacement, text)
+    return text
 
 
 CONFIG = load_config()
@@ -570,12 +616,16 @@ def transcribe_and_paste(audio, app_id=None):
     if INITIAL_PROMPT:
         transcribe_opts["initial_prompt"] = INITIAL_PROMPT
 
+    final_text = ""
+
     if n == 1:
         t0 = time.time()
         result = mlx_whisper.transcribe(audio, **transcribe_opts)
         elapsed = time.time() - t0
         text = strip_hallucinations(result["text"].strip())
+        text = apply_substitutions(text)
         text = llm_cleanup(text)
+        final_text = text
 
         if text:
             paste_text(text, target_app=app_id)
@@ -590,6 +640,7 @@ def transcribe_and_paste(audio, app_id=None):
                 overlay.show_transcribing(i + 1, n)
             result = mlx_whisper.transcribe(chunk, **transcribe_opts)
             text = strip_hallucinations(result["text"].strip())
+            text = apply_substitutions(text)
             text = llm_cleanup(text)
 
             if text:
@@ -598,8 +649,11 @@ def transcribe_and_paste(audio, app_id=None):
                 paste_text(prefix + text, target_app=app_id)
                 print(f" [{i+1}]", end="", flush=True)
 
-        full_text = " ".join(all_text)
-        print(f" | {len(full_text)} chars")
+        final_text = " ".join(all_text)
+        print(f" | {len(final_text)} chars")
+
+    log_transcription(os.path.basename(wav_path), final_text,
+                      len(audio) / SAMPLE_RATE)
 
     if overlay:
         overlay.show_done()

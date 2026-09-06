@@ -42,17 +42,31 @@ cat > "$APP_DST/Contents/MacOS/run" << 'RUNEOF'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DICTATION_DIR="$HOME/.dictation"
+PYTHON="$DICTATION_DIR/.venv/bin/python3"
 
-# If daemon is already running, open settings instead
-if pgrep -f "long-dictate.py" > /dev/null 2>&1; then
-    source "$DICTATION_DIR/.venv/bin/activate"
-    exec python3 "$DICTATION_DIR/settings.py" "$@"
+# Start daemon fully detached (survives .app exit)
+if ! pgrep -f "long-dictate.py" > /dev/null 2>&1; then
+    nohup "$PYTHON" "$DICTATION_DIR/long-dictate.py" > /tmp/dictation.log 2>&1 &
+    disown
 fi
 
-# Otherwise start the daemon
-exec > /tmp/dictation.log 2>&1
-source "$DICTATION_DIR/.venv/bin/activate"
-exec python3 "$DICTATION_DIR/long-dictate.py" "$@"
+# If settings server is already running, just open the browser
+if /usr/bin/curl -s -o /dev/null http://localhost:9876/ 2>/dev/null; then
+    /usr/bin/open "http://localhost:9876"
+    exit 0
+fi
+
+# Start settings server fully detached, open browser when ready
+nohup "$PYTHON" "$DICTATION_DIR/settings.py" > /tmp/dictation-settings.log 2>&1 &
+disown
+
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    if /usr/bin/curl -s -o /dev/null http://localhost:9876/ 2>/dev/null; then
+        /usr/bin/open "http://localhost:9876"
+        exit 0
+    fi
+    sleep 0.5
+done
 RUNEOF
 chmod +x "$APP_DST/Contents/MacOS/run"
 
