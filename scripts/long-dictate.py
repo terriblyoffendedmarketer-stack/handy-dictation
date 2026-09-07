@@ -45,7 +45,7 @@ import pyperclip
 from pynput import keyboard
 
 SAMPLE_RATE = 16000
-CHUNK_TARGET_S = 25
+CHUNK_TARGET_S = 28
 CHUNK_SEARCH_S = 3
 DICTATION_DIR = os.path.expanduser("~/.dictation")
 CONFIG_PATH = os.path.join(DICTATION_DIR, "config.json")
@@ -88,9 +88,10 @@ def load_config():
 
 
 def load_custom_words():
-    """Load custom vocabulary from words.txt as contextual initial_prompt.
-    Uses example sentences instead of bare word list — research shows 45.6%
-    improvement in rare-word recognition with contextual prompts."""
+    """Load custom vocabulary from words.txt as bare word list for initial_prompt.
+    Sentence-style prompts cause whisper to hallucinate prompt text when audio
+    doesn't match the prompt topic. Bare word lists bias spelling without
+    poisoning the decoder's language model."""
     if not os.path.exists(WORDS_PATH):
         return ""
     words = []
@@ -101,12 +102,6 @@ def load_custom_words():
                 words.append(line)
     if not words:
         return ""
-    prompt_path = os.path.join(DICTATION_DIR, "prompt-context.txt")
-    if os.path.exists(prompt_path):
-        with open(prompt_path) as f:
-            custom = f.read().strip()
-        if custom:
-            return custom
     return "Vocabulary: " + ", ".join(words) + "."
 
 
@@ -645,7 +640,7 @@ def transcribe_and_paste(audio, app_id=None):
         path_or_hf_repo=MODEL_REPO, language="en",
         condition_on_previous_text=False,
         hallucination_silence_threshold=2.0,
-        temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+        temperature=0.0,
         compression_ratio_threshold=2.4,
         word_timestamps=True,
     )
@@ -672,10 +667,18 @@ def transcribe_and_paste(audio, app_id=None):
     else:
         print(f"  {n} chunks |", end="", flush=True)
         all_text = []
+        prev_text = ""
         for i, chunk in enumerate(chunks):
             if overlay:
                 overlay.show_transcribing(i + 1, n)
-            result = mlx_whisper.transcribe(chunk, **transcribe_opts)
+            chunk_opts = dict(transcribe_opts)
+            if prev_text:
+                prompt_parts = []
+                if INITIAL_PROMPT:
+                    prompt_parts.append(INITIAL_PROMPT)
+                prompt_parts.append(prev_text[-200:])
+                chunk_opts["initial_prompt"] = " ".join(prompt_parts)
+            result = mlx_whisper.transcribe(chunk, **chunk_opts)
             text = strip_hallucinations(result["text"].strip())
             word_probs = extract_word_probs(result)
             text = apply_substitutions(text, word_probs)
@@ -683,6 +686,7 @@ def transcribe_and_paste(audio, app_id=None):
 
             if text:
                 all_text.append(text)
+                prev_text = text
                 prefix = " " if i > 0 else ""
                 paste_text(prefix + text, target_app=app_id)
                 print(f" [{i+1}]", end="", flush=True)

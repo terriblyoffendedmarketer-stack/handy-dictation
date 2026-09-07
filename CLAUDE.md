@@ -30,6 +30,9 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - **Punctuation must be stripped before word-level diffing.** Without stripping, "tool." vs "EPUB." produces substitutions with embedded periods that break regex matching.
 - **Substitutions must be confidence-gated.** Blind text replacement breaks common words (e.g., "family" → "library" replaces all instances). Use `word_timestamps=True` to get per-word probabilities; only substitute when whisper's confidence is below 0.7. This preserves correct recognitions while fixing uncertain ones.
 - **mlx-whisper fine-tuning not natively supported** but mlx-tune (pip install mlx-tune) supports LoRA fine-tuning whisper on Apple Silicon. Future path for Phase 3b.
+- **Sentence-style initial_prompt causes hallucinations.** Tested: "Prashil is dictating... I use Claude Code for programming..." as initial_prompt causes whisper to output prompt-like text ("I use the same tool for other applications") instead of transcribing audio. Bare word list ("Vocabulary: X, Y, Z.") biases spelling without poisoning the decoder. DO NOT use sentence prompts.
+- **Temperature cascade causes garbage output.** `temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0)` means whisper retries at higher temps when quality checks reject temp-0 output. High temps produce random text in wrong languages. Use `temperature=0.0` only — the temp-0 output is almost always correct even when quality metrics look bad.
+- **Both bugs compound.** Sentence prompt → bad logprob at temp 0 → triggers cascade → garbage at temp 0.8-1.0. Either bug alone is bad; together they produce complete fabrications.
 
 ## Roadmap
 
