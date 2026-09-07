@@ -151,8 +151,26 @@ def _strip_punct(word):
     return word.strip(".,!?;:\"'()[]{}—-")
 
 
+def _is_common_english(word):
+    """Check if a word is common English using macOS dictionary wordlist."""
+    w = word.lower().strip()
+    if w in COMMON_WORDS:
+        return True
+    dict_path = "/usr/share/dict/words"
+    if not hasattr(_is_common_english, "_dict"):
+        try:
+            with open(dict_path) as f:
+                _is_common_english._dict = set(w.lower() for w in f.read().split())
+        except Exception:
+            _is_common_english._dict = set()
+    return w in _is_common_english._dict
+
+
 def build_substitutions_from_corrections(corrections):
-    """Mine word-level substitution rules from user corrections."""
+    """Mine word-level substitution rules from user corrections.
+    Only creates rules where the original word is NOT a common English word,
+    to avoid replacing legitimate uses (e.g., 'family' → 'library' would break
+    sentences where the user actually says 'family')."""
     subs = {}
     for entry in corrections.values():
         orig = entry.get("original", "")
@@ -166,8 +184,14 @@ def build_substitutions_from_corrections(corrections):
             if op == "replace":
                 orig_phrase = " ".join(orig_words[i1:i2])
                 corr_phrase = " ".join(corr_words[j1:j2])
-                if orig_phrase != corr_phrase:
-                    subs[orig_phrase.lower()] = corr_phrase
+                if orig_phrase == corr_phrase:
+                    continue
+                orig_all_common = all(
+                    _is_common_english(w) for w in orig_words[i1:i2]
+                )
+                if orig_all_common:
+                    continue
+                subs[orig_phrase.lower()] = corr_phrase
     return subs
 
 

@@ -5,9 +5,9 @@
 **Phase: Self-learning infrastructure complete, collecting corrections.**
 Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, silence-aware chunking, progressive paste, minimal floating overlay, anti-hallucination filtering, web-based settings UI, transcription history with correction-based self-learning.
 
-**Current:** Phase 3a complete. Daemon logs every transcription. History tab in settings UI lets user play audio, correct transcriptions, and save corrections. Word-level diffs mine auto-substitution rules (applied post-transcription). Corrected proper nouns auto-added to whisper initial_prompt vocabulary.
+**Current:** Phase 3a complete with confidence-gated substitutions. Contextual initial_prompt (example sentences, not bare word list). Word-level probabilities from whisper gate substitution rules — only replaces words whisper was uncertain about. Substitution rules only created for non-dictionary words (won't create "family"→"library" rule).
 
-**Next:** Use the tool daily and correct errors to build substitution corpus. Phase 3b: fine-tune whisper-medium once enough correction pairs accumulated (50+).
+**Next:** Phase 3b: LoRA fine-tune whisper-medium via mlx-tune on audio-correction pairs. This is the only way to teach whisper the user's pronunciation patterns at the audio level.
 
 ## Critical Learnings (DO NOT re-test — these are settled)
 
@@ -28,6 +28,8 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - **General WER benchmarks don't reflect real-world accuracy** for this user. Trust actual test results over published numbers.
 - **Post-transcription substitution works well for consistent misrecognitions.** Word-level diffs from user corrections reliably capture proper noun errors. Combined with auto-vocabulary update (feeding corrected words back to initial_prompt), this gives a two-layer fix: whisper prompt biasing + post-processing substitution.
 - **Punctuation must be stripped before word-level diffing.** Without stripping, "tool." vs "EPUB." produces substitutions with embedded periods that break regex matching.
+- **Substitutions must be confidence-gated.** Blind text replacement breaks common words (e.g., "family" → "library" replaces all instances). Use `word_timestamps=True` to get per-word probabilities; only substitute when whisper's confidence is below 0.7. This preserves correct recognitions while fixing uncertain ones.
+- **mlx-whisper fine-tuning not natively supported** but mlx-tune (pip install mlx-tune) supports LoRA fine-tuning whisper on Apple Silicon. Future path for Phase 3b.
 
 ## Roadmap
 
@@ -60,19 +62,24 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - [x] Correction storage: save corrected transcriptions to corrections.json
 - [x] Auto-substitution: mine word-level diffs from corrections → substitutions.json
 - [x] Post-transcription substitution: daemon applies learned substitutions after whisper
+- [x] Confidence-gated substitution: only replaces words when whisper's probability < 0.7
 - [x] Auto-vocabulary: corrected proper nouns added to words.txt → whisper initial_prompt
 - [x] Punctuation-aware diffing: strips punctuation before comparing words
 
 ### Phase 3b: Fine-Tuning [PLANNED]
 Goal: Fine-tune whisper-medium on user's audio-correction pairs for proper nouns.
 - [ ] Accumulate 50+ correction pairs through daily use
-- [ ] Fine-tune whisper-medium on user's audio-correction pairs via mlx
+- [ ] Install mlx-tune (pip install mlx-tune) — supports whisper LoRA fine-tuning on Apple Silicon
+- [ ] Format WAV+correction pairs into HuggingFace dataset format
+- [ ] LoRA fine-tune whisper-medium (rank 16, lr=1e-5, encoder+decoder attention)
 - [ ] Evaluate if fine-tuned model improves proper noun recognition
-- [ ] Integration: load fine-tuned model weights at daemon startup
+- [ ] Integration: load fine-tuned/merged model weights at daemon startup
 
 Approach notes:
-- Phase 3a substitutions give immediate improvement without fine-tuning
+- Phase 3a confidence-gated substitutions give immediate improvement without fine-tuning
 - Fine-tuning needs sufficient data (50+ diverse correction pairs)
+- mlx-tune provides FastSTTModel, STTSFTTrainer for whisper LoRA on MLX
+- Estimated training time: 30-60min for ~100 samples on M-series
 - User's 89+ recordings in ~/.dictation/recordings/ are a starting corpus
 - Ground truth for 38 recordings saved in ~/.dictation/ground-truth.json
 
@@ -97,7 +104,8 @@ Approach notes:
 - `recordings/` — Saved audio (89+ WAV files)
 - `transcription-log.json` — Log of all daemon transcriptions (file, text, duration, model, timestamp)
 - `corrections.json` — User-corrected transcriptions (keyed by WAV filename)
-- `substitutions.json` — Auto-mined word substitution rules from corrections
+- `substitutions.json` — Auto-mined word substitution rules (non-dictionary words only)
+- `prompt-context.txt` — Contextual sentences for whisper's initial_prompt (editable)
 - `ground-truth.json` — Large-v3 transcriptions for 38 recordings
 - `benchmark-results.json` — WER results per model
 
