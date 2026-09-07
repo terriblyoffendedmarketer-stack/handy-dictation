@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "settings",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["scripts/settings.py"],
+      "port": 9876
+    }
+  ]
+}
