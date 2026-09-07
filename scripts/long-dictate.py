@@ -697,6 +697,42 @@ def transcribe_and_paste(audio, app_id=None):
         overlay.show_done()
 
 
+def cleanup_old_recordings(max_age_days=14):
+    """Delete recordings older than max_age_days, preserving any with corrections."""
+    wav_dir = os.path.join(DICTATION_DIR, "recordings")
+    if not os.path.isdir(wav_dir):
+        return
+    corrections = set()
+    if os.path.exists(os.path.join(DICTATION_DIR, "corrections.json")):
+        try:
+            with open(os.path.join(DICTATION_DIR, "corrections.json")) as f:
+                corrections = set(json.load(f).keys())
+        except Exception:
+            pass
+    gt = set()
+    gt_path = os.path.join(DICTATION_DIR, "ground-truth.json")
+    if os.path.exists(gt_path):
+        try:
+            with open(gt_path) as f:
+                gt = set(json.load(f).keys())
+        except Exception:
+            pass
+    preserve = corrections | gt
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    for fname in os.listdir(wav_dir):
+        if not fname.endswith(".wav"):
+            continue
+        if fname in preserve:
+            continue
+        fpath = os.path.join(wav_dir, fname)
+        if os.path.getmtime(fpath) < cutoff:
+            os.remove(fpath)
+            deleted += 1
+    if deleted:
+        print(f"  Cleaned up {deleted} recordings older than {max_age_days} days")
+
+
 def load_model():
     import mlx_whisper
 
@@ -731,6 +767,8 @@ def run_daemon():
     print(f"  Hotkey: {HOTKEY_NAME} (hold to talk, release to transcribe)")
     print(f"  Model: {MODEL_REPO}")
     print("  Loading model...", end="", flush=True)
+
+    cleanup_old_recordings(max_age_days=14)
 
     t0 = time.time()
     load_model()

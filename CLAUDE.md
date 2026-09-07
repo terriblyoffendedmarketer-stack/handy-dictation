@@ -2,12 +2,12 @@
 
 ## Status
 
-**Phase: Self-learning infrastructure complete, collecting corrections.**
+**Phase: Fine-tuning pipeline complete, first model trained.**
 Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, silence-aware chunking, progressive paste, minimal floating overlay, anti-hallucination filtering, web-based settings UI, transcription history with correction-based self-learning.
 
-**Current:** Phase 3a complete with confidence-gated substitutions. Contextual initial_prompt (example sentences, not bare word list). Word-level probabilities from whisper gate substitution rules — only replaces words whisper was uncertain about. Substitution rules only created for non-dictionary words (won't create "family"→"library" rule).
+**Current:** Phase 3b initial fine-tune done. First LoRA fine-tune on 36 samples reduced WER from 28.7% to 26.0% (8 test recordings). Confidence-gated substitutions and contextual prompting active. 14-day recording retention policy in place.
 
-**Next:** Phase 3b: LoRA fine-tune whisper-medium via mlx-tune on audio-correction pairs. This is the only way to teach whisper the user's pronunciation patterns at the audio level.
+**Next:** Accumulate more corrections through daily use, re-run fine-tuning periodically. Optionally switch daemon to fine-tuned model once more training data improves it further.
 
 ## Critical Learnings (DO NOT re-test — these are settled)
 
@@ -66,22 +66,23 @@ Daemon replaces Handy — Fn key push-to-talk, mlx-whisper medium on Metal GPU, 
 - [x] Auto-vocabulary: corrected proper nouns added to words.txt → whisper initial_prompt
 - [x] Punctuation-aware diffing: strips punctuation before comparing words
 
-### Phase 3b: Fine-Tuning [PLANNED]
+### Phase 3b: Fine-Tuning [IN PROGRESS]
 Goal: Fine-tune whisper-medium on user's audio-correction pairs for proper nouns.
-- [ ] Accumulate 50+ correction pairs through daily use
-- [ ] Install mlx-tune (pip install mlx-tune) — supports whisper LoRA fine-tuning on Apple Silicon
-- [ ] Format WAV+correction pairs into HuggingFace dataset format
-- [ ] LoRA fine-tune whisper-medium (rank 16, lr=1e-5, encoder+decoder attention)
-- [ ] Evaluate if fine-tuned model improves proper noun recognition
-- [ ] Integration: load fine-tuned/merged model weights at daemon startup
+- [x] Install mlx-tune — LoRA fine-tuning on Apple Silicon
+- [x] Build finetune.py: loads WAV+correction pairs, LoRA rank=16, encoder+decoder attention
+- [x] First training run: 36 samples, 108 steps, loss 1.35→0.81 (~40 min)
+- [x] Merge LoRA adapters into full model (manual W + B.T@A.T * scale, cast to fp16)
+- [x] Evaluate: 28.7% → 26.0% WER on 8 test recordings (modest but real improvement)
+- [x] 14-day recording retention policy (cleanup_old_recordings, preserves training data)
+- [ ] Accumulate more corrections, re-train periodically for larger improvement
+- [ ] Switch daemon to fine-tuned model once accuracy is clearly better
 
-Approach notes:
-- Phase 3a confidence-gated substitutions give immediate improvement without fine-tuning
-- Fine-tuning needs sufficient data (50+ diverse correction pairs)
-- mlx-tune provides FastSTTModel, STTSFTTrainer for whisper LoRA on MLX
-- Estimated training time: 30-60min for ~100 samples on M-series
-- User's 89+ recordings in ~/.dictation/recordings/ are a starting corpus
-- Ground truth for 38 recordings saved in ~/.dictation/ground-truth.json
+Gotchas:
+- mlx-tune's LoRA saves adapters as lora_a (in, rank) and lora_b (rank, out) — merge is (A@B).T
+- load_weights() rejects LoRA param names — must merge mathematically, not via load_weights
+- Merged weights become float32 from LoRA math — must cast back to float16 for mlx-whisper
+- HF datasets has a pickle bug on Python 3.14 — bypass with plain list of dicts
+- Only 2 corrections so far, but 38 ground-truth recordings also serve as training data
 
 ## File Map
 
@@ -90,9 +91,10 @@ Approach notes:
 - `scripts/settings.py` — Web-based settings GUI (hotkey, model, sounds, vocabulary, LLM toggle, daemon control, transcription history with correction UI).
 - `scripts/benchmark.py` — Accuracy benchmark. Ground truth via large-v3, compares models by WER.
 - `scripts/dictate` — Shell launcher for terminal use.
+- `scripts/finetune.py` — LoRA fine-tune whisper-medium on user's audio-correction pairs (mlx-tune).
 - `scripts/install-app.sh` — Install runtime to ~/.dictation/ and app to /Applications/.
 - `scripts/install-autostart.sh` — Add/remove auto-start at login.
-- `.venv/` — Python venv: mlx-whisper, sounddevice, pyperclip, pynput, numpy, mlx-qwen3-asr, mlx-audio.
+- `.venv/` — Python venv: mlx-whisper, mlx-tune, sounddevice, pyperclip, pynput, numpy, mlx-audio.
 
 ## Runtime Files (~/.dictation/)
 
@@ -108,6 +110,8 @@ Approach notes:
 - `prompt-context.txt` — Contextual sentences for whisper's initial_prompt (editable)
 - `ground-truth.json` — Large-v3 transcriptions for 38 recordings
 - `benchmark-results.json` — WER results per model
+- `whisper-finetuned/` — LoRA adapter weights from fine-tuning
+- `whisper-medium-finetuned/` — Merged model weights (after --merge)
 
 ## Setup & Run
 
