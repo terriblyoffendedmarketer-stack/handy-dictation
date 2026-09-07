@@ -450,7 +450,7 @@ def split_at_silence(audio):
     return chunks
 
 
-def trim_trailing_silence(audio, threshold=0.008, buffer_s=0.3):
+def trim_trailing_silence(audio, threshold=0.002, buffer_s=0.5):
     """Remove trailing silence to prevent whisper hallucination."""
     frame_size = SAMPLE_RATE // 10
     last_speech = 0
